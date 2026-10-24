@@ -436,6 +436,41 @@ a{color:var(--accent)}
 .range-row{display:flex;align-items:center;gap:12px}
 .range-row input[type=range]{flex:1;accent-color:var(--accent);height:4px}
 .range-val{font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted);min-width:34px;text-align:right}
+.model-row{align-items:flex-start}
+.combo{position:relative;flex:1;min-width:0}
+.combo > input{width:100%;padding-right:42px!important}
+.combo-btn{
+  position:absolute;right:2px;top:50%;transform:translateY(-50%);
+  width:38px;height:36px;border-radius:7px;display:grid;place-items:center;
+  color:var(--muted-2);z-index:2;transition:.15s;
+}
+.combo-btn:hover{color:var(--text);background:var(--panel)}
+.combo-btn.open{color:var(--accent)}
+.combo-btn .icon{width:16px;height:16px;transition:transform .18s}
+.combo-btn.open .icon{transform:rotate(180deg)}
+.combo-pop{
+  position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:30;
+  background:var(--panel-2);border:1px solid var(--border);border-radius:10px;
+  box-shadow:var(--shadow);padding:5px;max-height:250px;overflow-y:auto;
+  animation:pop .16s ease both;
+}
+.combo-pop[hidden]{display:none}
+.combo-opt{
+  display:flex;align-items:center;gap:8px;width:100%;min-height:44px;
+  padding:9px 11px;border-radius:8px;font-size:13px;color:var(--text);
+  text-align:left;transition:background .12s;
+}
+.combo-opt:hover,.combo-opt:focus{background:var(--accent-soft)}
+.combo-opt .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.combo-opt .check{width:15px;height:15px;color:var(--accent);opacity:0;flex:none}
+.combo-opt.selected .check{opacity:1}
+.combo-opt.selected .name{color:var(--accent);font-weight:600}
+.combo-empty{padding:14px 10px;text-align:center;font-size:11.5px;color:var(--muted-2);line-height:1.7}
+.combo-empty button{
+  display:inline-block;margin-top:8px;padding:7px 14px;border-radius:8px;
+  border:1px solid var(--border);background:var(--panel);color:var(--accent);
+  font-size:12px;font-weight:600;
+}
 .switch{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;border:1px solid var(--border);border-radius:9px;background:var(--bg)}
 .switch b{font-size:12.5px;font-weight:550;display:block}
 .switch span{font-size:10.5px;color:var(--muted-2)}
@@ -536,6 +571,7 @@ a{color:var(--accent)}
   <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24M1 1l22 22"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
 </svg>
 
 <!-- 侧栏 -->
@@ -668,9 +704,15 @@ a{color:var(--accent)}
       </div>
       <div class="field">
         <label for="setModel">模型 <span class="tag">Model</span></label>
-        <div class="row">
-          <input id="setModel" type="text" list="modelList" placeholder="gpt-4o-mini" spellcheck="false">
-          <datalist id="modelList"></datalist>
+        <div class="row model-row">
+          <div class="combo">
+            <input id="setModel" type="text" placeholder="gpt-4o-mini" spellcheck="false" autocomplete="off"
+                   role="combobox" aria-expanded="false" aria-controls="modelPop" aria-autocomplete="list">
+            <button class="combo-btn" id="modelToggle" type="button" aria-label="选择模型" aria-expanded="false">
+              <svg class="icon"><use href="#i-chevron-down"/></svg>
+            </button>
+            <div class="combo-pop" id="modelPop" role="listbox" aria-label="模型列表" hidden></div>
+          </div>
           <button class="btn-slim" id="fetchModels" type="button">获取模型</button>
         </div>
         <div class="hint" id="modelHint">填写接口支持的模型名称；也可先保存配置后点击「获取模型」自动拉取。</div>
@@ -1694,6 +1736,66 @@ function deleteConversation(id){
 /* =========================================================
    8. 设置弹窗
    ========================================================= */
+const LS_MODELS = 'novachat.models.v1';
+let modelOptions = [];
+let modelFilter = '';
+try {
+  const cached = JSON.parse(localStorage.getItem(LS_MODELS) || '[]');
+  if (Array.isArray(cached)) modelOptions = cached.filter(m => typeof m === 'string' && m);
+} catch(e){}
+
+function saveModelOptions(list){
+  modelOptions = list.slice();
+  try { localStorage.setItem(LS_MODELS, JSON.stringify(modelOptions)); } catch(e){}
+}
+
+function renderModelOptions(){
+  const pop = $('#modelPop');
+  if (!pop) return;
+  if (!modelOptions.length){
+    pop.innerHTML = '<div class="combo-empty">还没有模型列表<br><button type="button" data-act="fetch-models">获取模型</button></div>';
+    return;
+  }
+  const q = modelFilter.trim().toLowerCase();
+  const list = q ? modelOptions.filter(m => m.toLowerCase().indexOf(q) !== -1) : modelOptions;
+  if (!list.length){
+    pop.innerHTML = '<div class="combo-empty">没有匹配的模型<br>可直接手动输入模型名称</div>';
+    return;
+  }
+  const current = $('#setModel').value.trim();
+  pop.innerHTML = list.map(m =>
+    '<button type="button" class="combo-opt' + (m === current ? ' selected' : '') + '" data-model="' + escapeHtml(m) + '" role="option" aria-selected="' + (m === current) + '">' +
+      '<span class="name">' + escapeHtml(m) + '</span>' +
+      '<svg class="icon check"><use href="#i-check"/></svg>' +
+    '</button>'
+  ).join('');
+}
+
+function openModelPop(){
+  const pop = $('#modelPop');
+  if (!pop) return;
+  modelFilter = '';
+  renderModelOptions();
+  pop.hidden = false;
+  $('#modelToggle').classList.add('open');
+  $('#modelToggle').setAttribute('aria-expanded', 'true');
+  $('#setModel').setAttribute('aria-expanded', 'true');
+}
+
+function closeModelPop(){
+  const pop = $('#modelPop');
+  if (!pop || pop.hidden) return;
+  pop.hidden = true;
+  $('#modelToggle').classList.remove('open');
+  $('#modelToggle').setAttribute('aria-expanded', 'false');
+  $('#setModel').setAttribute('aria-expanded', 'false');
+}
+
+function toggleModelPop(){
+  if ($('#modelPop').hidden) openModelPop();
+  else closeModelPop();
+}
+
 function fillSettings(){
   $('#setBase').value = config.baseUrl;
   $('#setKey').value = config.apiKey;
@@ -1710,13 +1812,16 @@ function fillSettings(){
 }
 
 function openSettings(){
+  closeModelPop();
   fillSettings();
+  renderModelOptions();
   closeSidebar();
   $('#settingsModal').classList.add('open');
   setTimeout(() => $('#setBase').focus(), 60);
 }
 
 function closeSettings(){
+  closeModelPop();
   $('#settingsModal').classList.remove('open');
 }
 
@@ -1789,12 +1894,13 @@ async function fetchModelList(silent){
     const list = (data.data || data.models || []).map(m => (typeof m === 'string' ? m : (m.id || m.name))).filter(Boolean);
     if (!list.length) throw new Error('接口没有返回模型列表');
 
-    const datalist = $('#modelList');
-    datalist.innerHTML = list.map(m => '<option value="' + escapeHtml(m) + '"></option>').join('');
+    saveModelOptions(list);
     if (!$('#setModel').value.trim()) $('#setModel').value = list[0];
-    $('#modelHint').textContent = '已获取 ' + list.length + ' 个模型，可从输入框下拉选择。';
+    renderModelOptions();
+    $('#modelHint').textContent = '已获取 ' + list.length + ' 个模型，点击输入框右侧箭头即可选择。';
     showTestResult('连接成功，共发现 ' + list.length + ' 个模型。', true);
     if (silent) toast('已获取 ' + list.length + ' 个模型', 'ok');
+    else openModelPop();
   } catch(err){
     showTestResult('连接失败：' + friendlyError(err), false);
   } finally {
@@ -1931,6 +2037,43 @@ function bindEvents(){
   $('#testBtn').addEventListener('click', testConnection);
   $('#fetchModels').addEventListener('click', () => fetchModelList(false));
 
+  $('#modelToggle').addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleModelPop();
+  });
+
+  $('#setModel').addEventListener('click', () => {
+    if (modelOptions.length) openModelPop();
+  });
+
+  $('#setModel').addEventListener('input', () => {
+    if (!$('#modelPop').hidden){
+      modelFilter = $('#setModel').value;
+      renderModelOptions();
+    }
+  });
+
+  $('#modelPop').addEventListener('click', e => {
+    const fetchBtn = e.target.closest('[data-act="fetch-models"]');
+    if (fetchBtn){
+      closeModelPop();
+      fetchModelList(false);
+      return;
+    }
+    const opt = e.target.closest('.combo-opt');
+    if (!opt) return;
+    const model = opt.getAttribute('data-model') || '';
+    $('#setModel').value = model;
+    $('#modelHint').textContent = model ? '已选择模型：' + model : '填写接口支持的模型名称。';
+    closeModelPop();
+    $('#modelToggle').focus();
+  });
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.model-row')) closeModelPop();
+  });
+
   $('#settingsModal').addEventListener('click', e => {
     if (e.target === $('#settingsModal')) closeSettings();
   });
@@ -1960,6 +2103,7 @@ function bindEvents(){
       createConversation(true);
     }
     if (e.key === 'Escape'){
+      if (!$('#modelPop').hidden){ closeModelPop(); return; }
       if ($('#settingsModal').classList.contains('open')) closeSettings();
       else closeSidebar();
     }
