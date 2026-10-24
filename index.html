@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236366f1'/%3E%3Cstop offset='1' stop-color='%23a855f7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='24' fill='url(%23g)'/%3E%3Cpath d='M50 18l7 21 22 8-22 8-7 21-7-21-22-8 22-8z' fill='white'/%3E%3C/svg%3E">
 <title>Nova Chat · AI 对话</title>
 <style>
 /* ---------- 主题变量 ---------- */
@@ -388,6 +389,69 @@ a{color:var(--accent)}
 .send-btn.stop{background:var(--danger);box-shadow:0 6px 16px rgba(255,107,129,.25)}
 .disclaimer{text-align:center;font-size:10.5px;color:var(--muted-2);margin-top:8px}
 
+/* 输入模式与附件 */
+.mode-btn{
+  height:28px;padding:0 9px;border-radius:99px;border:1px solid var(--border);
+  background:var(--bg);font-size:11px;color:var(--muted);
+  display:flex;align-items:center;gap:5px;flex:none;transition:.15s;
+}
+.mode-btn:hover{color:var(--text);border-color:var(--accent)}
+.mode-btn.image{color:var(--accent);border-color:rgba(124,140,255,.4);background:var(--accent-soft)}
+.mode-btn .icon{width:13px;height:13px}
+.tool-btn{
+  width:30px;height:30px;border-radius:8px;display:grid;place-items:center;
+  color:var(--muted-2);flex:none;transition:.15s;
+}
+.tool-btn:hover{background:var(--bg);color:var(--accent)}
+.tool-btn .icon{width:16px;height:16px}
+.tool-btn[hidden]{display:none}
+.attachments{display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px 0}
+.attachments[hidden]{display:none}
+.attach-item{position:relative;width:64px;height:64px;border-radius:9px;overflow:hidden;border:1px solid var(--border);background:var(--bg);flex:none}
+.attach-item img{width:100%;height:100%;object-fit:cover;display:block}
+.attach-remove{
+  position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;
+  background:rgba(0,0,0,.62);color:#fff;font-size:13px;line-height:1;
+  display:grid;place-items:center;
+}
+.composer.dragging{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft),0 12px 36px rgba(0,0,0,.18)}
+
+/* 消息图片 */
+.msg-images{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:8px}
+.msg-images:empty{display:none}
+.msg.user .msg-images{max-width:520px;margin-left:auto;margin-top:0;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+.msg.user .msg-images + .user-bubble{margin-top:8px}
+.msg-image{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--panel);margin:0}
+.msg-image img{display:block;width:100%;max-height:320px;object-fit:cover;cursor:zoom-in}
+.msg.user .msg-image img{max-height:200px}
+.img-dl{
+  position:absolute;right:6px;bottom:6px;height:26px;padding:0 9px;border-radius:6px;
+  background:rgba(0,0,0,.62);color:#fff;font-size:10.5px;
+  display:flex;align-items:center;gap:4px;opacity:0;transition:.15s;
+}
+.msg-image:hover .img-dl{opacity:1}
+@media (hover:none){.img-dl{opacity:1}}
+.img-loading{
+  display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);
+  padding:16px;border:1px dashed var(--border);border-radius:10px;background:var(--panel);
+}
+.spinner{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);border-top-color:var(--accent);animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 图片预览 */
+.lightbox{
+  position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;
+  padding:26px;background:rgba(2,4,9,.88);backdrop-filter:blur(8px);
+}
+.lightbox[hidden]{display:none}
+.lightbox img{max-width:100%;max-height:100%;border-radius:10px;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+.lb-close{
+  position:absolute;top:18px;right:18px;width:42px;height:42px;border-radius:50%;
+  background:rgba(255,255,255,.12);color:#fff;display:grid;place-items:center;
+}
+.lb-close:hover{background:rgba(255,255,255,.2)}
+.lb-close .icon{width:20px;height:20px}
+
 /* ---------- 弹窗 ---------- */
 .modal{
   position:fixed;inset:0;z-index:100;display:none;align-items:flex-start;justify-content:center;
@@ -543,7 +607,9 @@ a{color:var(--accent)}
   .msg.user .msg-content{max-width:88%}
 }
 @media (max-width:520px){
-  .model-badge{max-width:150px}
+  .composer-left{gap:6px}
+  .mode-btn{padding:0 8px;font-size:10.5px}
+  .model-badge{max-width:118px}
   .chat-meta{display:none}
   .top-actions{gap:4px}
 }
@@ -572,6 +638,8 @@ a{color:var(--accent)}
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
   <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
 </svg>
 
 <!-- 侧栏 -->
@@ -635,11 +703,11 @@ a{color:var(--accent)}
     <div class="welcome" id="welcome">
       <div class="halo"><svg><use href="#i-spark"/></svg></div>
       <h2>有什么可以帮你？</h2>
-      <p>连接任意 OpenAI 兼容接口，开始你的 AI 对话。</p>
+      <p>支持多模态图片理解与 AI 生图，连接任意 OpenAI 兼容接口。</p>
       <div class="cards" id="suggestCards">
         <div class="card" data-prompt="帮我解释一下这段代码的运行逻辑，并指出潜在问题。"><b>解释代码</b><span>逐步拆解逻辑，指出潜在问题</span></div>
         <div class="card" data-prompt="帮我写一份本周的工作周报，包含进展、问题与下周计划。"><b>撰写周报</b><span>整理进展、风险与下周计划</span></div>
-        <div class="card" data-prompt="把下面这段话翻译成地道的英文，并说明用词选择："><b>中英翻译</b><span>翻译并解释用词与语气</span></div>
+        <div class="card" data-prompt="一只在雨中的柴犬，电影感光线，竖版构图" data-mode="image"><b>AI 生图</b><span>切换到生图模式，用一句话创作图片</span></div>
         <div class="card" data-prompt="围绕「AI 效率工具」帮我做一次头脑风暴，给出 10 个产品点子。"><b>头脑风暴</b><span>围绕任意主题快速发散灵感</span></div>
       </div>
       <div class="setup-note" id="setupNote" style="display:none">
@@ -651,10 +719,19 @@ a{color:var(--accent)}
   </section>
 
   <footer class="composer-wrap">
-    <div class="composer">
+    <div class="composer" id="composer">
+      <div class="attachments" id="attachments" hidden></div>
       <textarea id="input" rows="1" placeholder="给 AI 发送消息…" autocomplete="off"></textarea>
       <div class="composer-bar">
         <div class="composer-left">
+          <button class="mode-btn" id="modeBtn" type="button" title="切换到生图模式">
+            <svg class="icon"><use href="#i-message"/></svg>
+            <span id="modeText">对话</span>
+          </button>
+          <button class="tool-btn" id="attachBtn" type="button" title="添加图片（最多 4 张）" aria-label="添加图片">
+            <svg class="icon"><use href="#i-image"/></svg>
+          </button>
+          <input type="file" id="fileInput" accept="image/*" multiple hidden>
           <span class="model-badge" id="modelBadge"><i></i><span id="modelBadgeText">未配置模型</span></span>
         </div>
         <div class="composer-right">
@@ -685,7 +762,7 @@ a{color:var(--accent)}
       <div class="field">
         <label for="setBase">API 地址 <span class="tag">Base URL</span></label>
         <input id="setBase" type="text" placeholder="https://api.openai.com/v1" spellcheck="false">
-        <div class="hint">支持 OpenAI 兼容接口。可填到 <code>/v1</code>，也可直接填完整的 <code>/chat/completions</code> 地址。</div>
+        <div class="hint">支持 OpenAI 兼容接口。可填到 <code>/v1</code>，也可直接填完整的 <code>/chat/completions</code> 地址；同源部署可用 <code>/v1</code> 这类相对路径。</div>
       </div>
       <div class="field">
         <label for="setKey">API Key</label>
@@ -716,6 +793,35 @@ a{color:var(--accent)}
           <button class="btn-slim" id="fetchModels" type="button">获取模型</button>
         </div>
         <div class="hint" id="modelHint">填写接口支持的模型名称；也可先保存配置后点击「获取模型」自动拉取。</div>
+      </div>
+      <div class="field">
+        <label for="setImageModel">生图模型 <span class="tag">可选</span></label>
+        <input id="setImageModel" type="text" placeholder="如 dall-e-3 / gpt-image-1，留空则使用上方模型" spellcheck="false">
+        <div class="hint">「生图」模式调用 <code>/images/generations</code> 接口；留空时使用上方对话模型。</div>
+      </div>
+      <div class="field">
+        <label for="setImageSize">生图尺寸 <span class="tag">Image Size</span></label>
+        <select id="setImageSize">
+          <option value="1024x1024">1024 × 1024（方形）</option>
+          <option value="1536x1024">1536 × 1024（横向）</option>
+          <option value="1024x1536">1024 × 1536（竖向）</option>
+          <option value="1792x1024">1792 × 1024（DALL·E 3 横向）</option>
+          <option value="1024x1792">1024 × 1792（DALL·E 3 竖向）</option>
+          <option value="512x512">512 × 512（小图）</option>
+          <option value="none">默认（不传 size 参数）</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="switch">
+          <div>
+            <b>请求聊天模型输出图片</b>
+            <span>附加 modalities: ["image","text"]，OpenRouter 等需要；OpenAI 官方接口请关闭</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="setImageOutput">
+            <i></i>
+          </label>
+        </div>
       </div>
       <div class="field">
         <label for="setTemp">温度 <span class="tag">Temperature</span></label>
@@ -763,6 +869,13 @@ a{color:var(--accent)}
 
 <div class="toasts" id="toasts"></div>
 
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lb-close" id="lbClose" type="button" aria-label="关闭预览">
+    <svg class="icon"><use href="#i-x"/></svg>
+  </button>
+  <img id="lbImg" alt="图片预览">
+</div>
+
 <script>
 (function(){
 'use strict';
@@ -809,6 +922,9 @@ function getConfig(){
     apiKey: CookieStore.get('api_key').trim(),
     headersRaw: CookieStore.get('headers') || '{}',
     model: CookieStore.get('model').trim(),
+    imageModel: CookieStore.get('image_model').trim(),
+    imageSize: CookieStore.get('image_size') || '1024x1024',
+    imageOutput: CookieStore.get('image_output') === '1',
     temperature: isNaN(temp) ? 0.7 : temp,
     maxTokens: parseInt(CookieStore.get('max_tokens'), 10) || 0,
     systemPrompt: CookieStore.get('system_prompt') || '',
@@ -823,6 +939,9 @@ function saveConfig(next){
   CookieStore.set('api_key', next.apiKey);
   CookieStore.set('headers', next.headersRaw);
   CookieStore.set('model', next.model);
+  CookieStore.set('image_model', next.imageModel || '');
+  CookieStore.set('image_size', next.imageSize || '');
+  CookieStore.set('image_output', next.imageOutput ? '1' : '0');
   CookieStore.set('temperature', String(next.temperature));
   CookieStore.set('max_tokens', String(next.maxTokens || ''));
   CookieStore.set('system_prompt', next.systemPrompt);
@@ -860,6 +979,15 @@ function modelsEndpoint(base){
   if (/\/chat\/completions$/i.test(b)) b = b.replace(/\/chat\/completions$/i, '');
   if (/\/v\d+$/i.test(b)) return b + '/models';
   return b + '/v1/models';
+}
+
+function imagesEndpoint(base){
+  let b = (base || '').trim().replace(/\/+$/, '');
+  if (!b) return '';
+  if (/\/images\/generations$/i.test(b)) return b;
+  if (/\/chat\/completions$/i.test(b)) b = b.replace(/\/chat\/completions$/i, '');
+  if (/\/v\d+$/i.test(b)) return b + '/images/generations';
+  return b + '/v1/images/generations';
 }
 
 function buildHeaders(extraAuth){
@@ -1182,6 +1310,8 @@ let isGenerating = false;
 let activeController = null;
 let searchTerm = '';
 let stickToBottom = true;
+let chatMode = 'chat';
+let pendingImages = [];
 
 function loadStore(){
   try {
@@ -1247,8 +1377,9 @@ function autoTitle(conv){
   if (conv.title && conv.title !== '新对话') return;
   const first = conv.messages.find(m => m.role === 'user');
   if (!first) return;
-  let t = first.content.replace(/\s+/g, ' ').trim();
+  let t = (first.content || '').replace(/\s+/g, ' ').trim();
   if (t.length > 22) t = t.slice(0, 22) + '…';
+  if (!t && first.images && first.images.length) t = '图片对话';
   conv.title = t || '新对话';
 }
 
@@ -1272,7 +1403,9 @@ function renderSidebar(){
     const last = c.messages.length ? c.messages[c.messages.length - 1] : null;
     let preview = '暂无消息';
     if (last){
-      preview = (last.role === 'user' ? '你：' : 'AI：') + (last.content || '').replace(/\s+/g, ' ').slice(0, 30);
+      const text = (last.content || '').replace(/\s+/g, ' ').slice(0, 30);
+      const hasImg = last.images && last.images.length;
+      preview = (last.role === 'user' ? '你：' : 'AI：') + (text || (hasImg ? '[图片]' : ''));
     }
     return '<div class="conv-item' + (c.id === currentId ? ' active' : '') + '" data-id="' + c.id + '">' +
       '<div class="t"><b>' + escapeHtml(c.title || '新对话') + '</b><span>' + escapeHtml(preview) + '</span></div>' +
@@ -1284,16 +1417,20 @@ function renderSidebar(){
 function updateModelBadge(){
   const badge = $('#modelBadge');
   const text = $('#modelBadgeText');
-  const hasApi = !!config.baseUrl;
-  text.textContent = config.model || (config.baseUrl ? '未选择模型' : '未配置模型');
+  const isImage = chatMode === 'image';
+  const model = isImage ? (config.imageModel || config.model) : config.model;
+  const hasApi = !!(config.baseUrl && model);
+  text.textContent = model || (config.baseUrl ? '未选择模型' : '未配置模型');
   badge.classList.toggle('ok', hasApi);
-  badge.title = hasApi ? ('API：' + config.baseUrl + (config.model ? ' · 模型：' + config.model : '')) : '尚未配置 API';
+  badge.title = config.baseUrl
+    ? ('API：' + config.baseUrl + ' · ' + (isImage ? '生图模型：' : '模型：') + (model || '未选择'))
+    : '尚未配置 API';
   const note = $('#setupNote');
-  if (note) note.style.display = (config.baseUrl && config.model) ? 'none' : 'flex';
+  if (note) note.style.display = hasApi ? 'none' : 'flex';
   const meta = $('#chatMeta');
   if (meta){
-    if (isGenerating) meta.textContent = '正在生成回复…';
-    else if (hasApi) meta.textContent = (config.model || '未选择模型') + ' · 配置已保存';
+    if (isGenerating) meta.textContent = isImage ? '正在生成图片…' : '正在生成回复…';
+    else if (config.baseUrl) meta.textContent = (isImage ? '生图 · ' : '') + (model || '未选择模型') + ' · 配置已保存';
     else meta.textContent = '尚未配置 API';
   }
 }
@@ -1301,36 +1438,242 @@ function updateModelBadge(){
 /* =========================================================
    5. 消息渲染
    ========================================================= */
+function imageUrl(img){
+  return img && (img.dataUrl || img.url) || '';
+}
+
+function imagesHTML(images, cls){
+  if (!images || !images.length) return '';
+  const isAI = cls === 'ai';
+  return images.map(img => {
+    const url = imageUrl(img);
+    if (!url) return '';
+    const safe = escapeHtml(url);
+    const alt = escapeHtml(img.alt || (isAI ? 'AI 生成的图片' : '图片'));
+    return '<div class="msg-image">' +
+      '<img src="' + safe + '" alt="' + alt + '" loading="lazy" data-act="zoom" data-src="' + safe + '">' +
+      (isAI ? '<button class="img-dl" type="button" data-act="download" data-src="' + safe + '" data-name="' + escapeHtml(img.name || 'ai-image.png') + '">下载</button>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function normalizeImages(value){
+  const out = [];
+  const push = (item) => {
+    if (!item) return;
+    if (typeof item === 'string'){
+      if (/^(https?:\/\/|data:image\/)/i.test(item)) out.push({ url: item });
+      return;
+    }
+    let url = '';
+    if (item.b64_json) url = 'data:image/png;base64,' + item.b64_json;
+    else if (item.dataUrl) url = item.dataUrl;
+    else if (item.url) url = item.url;
+    else if (item.image_url && item.image_url.url) url = item.image_url.url;
+    else if (item.source && item.source.data){
+      const mt = item.source.media_type || 'image/png';
+      url = 'data:' + mt + ';base64,' + item.source.data;
+    }
+    if (url) out.push({ url, alt: item.alt || '' });
+  };
+  if (Array.isArray(value)) value.forEach(push);
+  else if (value && typeof value === 'object') push(value);
+  return out;
+}
+
+function appendImages(msg, list){
+  if (!list || !list.length) return false;
+  if (!msg.images) msg.images = [];
+  let added = false;
+  list.forEach(img => {
+    const url = imageUrl(img);
+    if (!url) return;
+    if (!msg.images.some(x => imageUrl(x) === url)){
+      msg.images.push({ url, alt: img.alt || '' });
+      added = true;
+    }
+  });
+  return added;
+}
+
+function extractGeneratedImages(data){
+  const out = [];
+  const push = (item) => {
+    if (!item) return;
+    if (typeof item === 'string'){
+      if (/^(https?:\/\/|data:image\/)/i.test(item)) out.push({ url: item });
+      return;
+    }
+    let url = '';
+    if (item.b64_json) url = 'data:image/png;base64,' + item.b64_json;
+    else if (item.url) url = item.url;
+    else if (item.image_url && item.image_url.url) url = item.image_url.url;
+    else if (item.image) url = item.image;
+    if (url) out.push({ url, alt: item.revised_prompt || 'AI 生成的图片' });
+  };
+  const arr = data && (data.data || data.images || data.output);
+  if (Array.isArray(arr)) arr.forEach(push);
+  else if (data) push(data);
+  return out;
+}
+
+function openLightbox(src){
+  if (!src) return;
+  $('#lbImg').src = src;
+  $('#lightbox').hidden = false;
+}
+function closeLightbox(){
+  $('#lightbox').hidden = true;
+  $('#lbImg').src = '';
+}
+
+async function downloadImage(src, name){
+  try {
+    if (/^data:/i.test(src)){
+      const a = document.createElement('a');
+      a.href = src;
+      a.download = name || 'ai-image.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+    const res = await fetch(src);
+    if (!res.ok) throw new Error('download failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name || 'ai-image.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch(e){
+    window.open(src, '_blank', 'noopener');
+  }
+}
+
+function compressImage(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (file.type === 'image/gif'){
+        resolve({ name: file.name || 'image.gif', dataUrl: result });
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 1280;
+          let w = img.naturalWidth || img.width;
+          let h = img.naturalHeight || img.height;
+          const scale = Math.min(1, maxDim / Math.max(w, h));
+          w = Math.max(1, Math.round(w * scale));
+          h = Math.max(1, Math.round(h * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          let dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          if (dataUrl.length > 2.5 * 1024 * 1024) dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+          resolve({ name: file.name || 'image.jpg', dataUrl });
+        } catch(e){
+          resolve({ name: file.name || 'image', dataUrl: result });
+        }
+      };
+      img.onerror = () => reject(new Error('decode failed'));
+      img.src = result;
+    };
+    reader.onerror = () => reject(new Error('read failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPendingImages(){
+  const strip = $('#attachments');
+  if (!strip) return;
+  if (chatMode === 'image' || !pendingImages.length){
+    strip.hidden = true;
+    strip.innerHTML = '';
+    return;
+  }
+  strip.hidden = false;
+  strip.innerHTML = pendingImages.map((img, i) =>
+    '<div class="attach-item">' +
+      '<img src="' + escapeHtml(img.dataUrl) + '" alt="附件">' +
+      '<button class="attach-remove" type="button" data-remove="' + i + '" aria-label="移除图片">×</button>' +
+    '</div>'
+  ).join('');
+}
+
+async function addImageFiles(files){
+  const arr = Array.from(files || []).filter(f => f && /^image\//.test(f.type));
+  if (!arr.length) return;
+  if (chatMode === 'image') setMode('chat');
+  const room = 4 - pendingImages.length;
+  if (room <= 0){ toast('最多添加 4 张图片', 'err'); return; }
+  const list = arr.slice(0, room);
+  if (arr.length > room) toast('最多添加 4 张图片');
+  for (const f of list){
+    if (f.size > 12 * 1024 * 1024){
+      toast('图片「' + (f.name || '') + '」超过 12MB，已跳过', 'err');
+      continue;
+    }
+    try {
+      pendingImages.push(await compressImage(f));
+    } catch(e){
+      toast('图片读取失败：' + (f.name || ''), 'err');
+    }
+  }
+  renderPendingImages();
+  autoResize();
+}
+
 function messageHTML(msg, index, streamingIndex){
   const isUser = msg.role === 'user';
   const time = formatTime(msg.ts);
   if (isUser){
+    const userImages = (msg.images && msg.images.length)
+      ? '<div class="msg-images user-images">' + imagesHTML(msg.images, 'user') + '</div>'
+      : '';
+    const bubble = msg.content ? '<div class="user-bubble">' + escapeHtml(msg.content) + '</div>' : '';
     return '<div class="msg user" data-index="' + index + '">' +
       '<div class="msg-content">' +
-        '<div class="user-bubble">' + escapeHtml(msg.content) + '</div>' +
+        userImages + bubble +
         '<div class="msg-actions">' +
-          '<button class="act-btn" data-act="copy" data-index="' + index + '"><svg class="icon"><use href="#i-copy"/></svg>复制</button>' +
+          (msg.content ? '<button class="act-btn" data-act="copy" data-index="' + index + '"><svg class="icon"><use href="#i-copy"/></svg>复制</button>' : '') +
           '<button class="act-btn" data-act="edit" data-index="' + index + '"><svg class="icon"><use href="#i-refresh"/></svg>编辑重发</button>' +
         '</div>' +
       '</div></div>';
   }
 
   const isStreaming = streamingIndex === index;
-  let body = '<details class="reasoning"' + (msg.reasoning ? '' : ' style="display:none"') + (isStreaming ? ' open' : '') +
+  const hasImages = !!(msg.images && msg.images.length);
+  const isImageGen = msg.kind === 'image';
+  let body = '<details class="reasoning"' + (msg.reasoning ? '' : ' style="display:none"') + (isStreaming && !isImageGen ? ' open' : '') +
     '><summary>思考过程</summary><div class="body">' + escapeHtml(msg.reasoning || '') + '</div></details>';
-  if (msg.error && !msg.content){
+  if (msg.error && !msg.content && !hasImages){
     body += '<div class="msg-error">' + escapeHtml(msg.error) + '</div>';
+  } else if (isImageGen && !msg.content && !hasImages){
+    body += '<div class="md"><div class="img-loading"><span class="spinner"></span>' +
+      (isStreaming ? '正在生成图片…' : '暂无图片') + '</div></div>';
   } else {
-    const inner = (!msg.content && isStreaming)
+    const inner = (!msg.content && isStreaming && !hasImages)
       ? '<div class="typing"><i></i><i></i><i></i></div>'
-      : mdToHtml(msg.content) + (isStreaming ? '<span class="cursor"></span>' : '');
-    body += '<div class="md">' + inner + '</div>';
+      : (msg.content ? mdToHtml(msg.content) + (isStreaming ? '<span class="cursor"></span>' : '') : '');
+    if (inner) body += '<div class="md">' + inner + '</div>';
     if (msg.error) body += '<div class="msg-error" style="margin-top:8px">' + escapeHtml(msg.error) + '</div>';
   }
+  body += '<div class="msg-images ai-images" data-images>' + imagesHTML(msg.images, 'ai') + '</div>';
 
   const actions = isStreaming ? '' :
     '<div class="msg-actions">' +
-      '<button class="act-btn" data-act="copy" data-index="' + index + '"><svg class="icon"><use href="#i-copy"/></svg>复制</button>' +
+      (msg.content ? '<button class="act-btn" data-act="copy" data-index="' + index + '"><svg class="icon"><use href="#i-copy"/></svg>复制</button>' : '') +
       '<button class="act-btn" data-act="regen" data-index="' + index + '"><svg class="icon"><use href="#i-refresh"/></svg>重新生成</button>' +
     '</div>';
 
@@ -1387,6 +1730,17 @@ function buildRequestMessages(conv){
   conv.messages.forEach(m => {
     if (!m || !m.role || m.error) return;
     if (m.role === 'assistant' && !m.content) return;
+    if (m.role === 'user' && m.images && m.images.length){
+      const parts = [];
+      if (m.content) parts.push({ type: 'text', text: m.content });
+      if (!m.content) parts.push({ type: 'text', text: '请描述这张图片。' });
+      m.images.forEach(img => {
+        const url = imageUrl(img);
+        if (url) parts.push({ type: 'image_url', image_url: { url } });
+      });
+      msgs.push({ role: 'user', content: parts });
+      return;
+    }
     msgs.push({ role: m.role, content: m.content });
   });
   return msgs;
@@ -1412,20 +1766,45 @@ function friendlyError(err){
   return msg || '请求失败，请检查 API 配置与网络';
 }
 
+function contentToParts(value){
+  let text = '';
+  const images = [];
+  if (Array.isArray(value)){
+    value.forEach(p => {
+      if (!p) return;
+      if (typeof p === 'string'){ text += p; return; }
+      if (typeof p.text === 'string') text += p.text;
+      if (p.type && /image/i.test(String(p.type))) images.push(...normalizeImages([p]));
+    });
+  }
+  return { text, images };
+}
+
 function extractDelta(json){
-  if (!json) return { content: '', reasoning: '' };
+  if (!json) return { content: '', reasoning: '', images: [] };
   const choice = (json.choices && json.choices[0]) || {};
   const delta = choice.delta || {};
   const message = choice.message || {};
-  let content = '';
+  const dParts = contentToParts(delta.content);
+  const mParts = contentToParts(message.content);
+
+  let content = dParts.text || mParts.text || '';
+  if (!content && typeof delta.content === 'string') content = delta.content;
+  if (!content && typeof message.content === 'string') content = message.content;
+
   let reasoning = '';
-  if (typeof delta.content === 'string') content = delta.content;
-  else if (Array.isArray(delta.content)) content = delta.content.map(p => (p && p.text) || '').join('');
   if (typeof delta.reasoning_content === 'string') reasoning = delta.reasoning_content;
   else if (typeof delta.reasoning === 'string') reasoning = delta.reasoning;
-  if (!content && typeof message.content === 'string') content = message.content;
   if (!reasoning && typeof message.reasoning_content === 'string') reasoning = message.reasoning_content;
-  return { content, reasoning };
+  if (!reasoning && typeof message.reasoning === 'string') reasoning = message.reasoning;
+
+  const images = [];
+  images.push(...normalizeImages(delta.images));
+  images.push(...dParts.images);
+  images.push(...normalizeImages(message.images));
+  images.push(...mParts.images);
+
+  return { content, reasoning, images };
 }
 
 async function streamResponse(res, msg, bubble){
@@ -1438,7 +1817,8 @@ async function streamResponse(res, msg, bubble){
 
   const paint = () => {
     if (!bubble || !bubble.isConnected) return;
-    const r = $('.reasoning .body', bubble.parentElement);
+    const contentBox = bubble.parentElement;
+    const r = $('.reasoning .body', contentBox);
     if (msg.reasoning && r){
       r.textContent = msg.reasoning;
       const det = r.closest('details');
@@ -1449,6 +1829,8 @@ async function streamResponse(res, msg, bubble){
     } else {
       bubble.innerHTML = mdToHtml(msg.content) + (done ? '' : '<span class="cursor"></span>');
     }
+    const imgBox = $('.msg-images', contentBox);
+    if (imgBox) imgBox.innerHTML = imagesHTML(msg.images, 'ai');
     scrollToBottom(false);
   };
   const schedule = () => {
@@ -1480,7 +1862,8 @@ async function streamResponse(res, msg, bubble){
       const d = extractDelta(json);
       if (d.reasoning) msg.reasoning += d.reasoning;
       if (d.content) msg.content += d.content;
-      if (d.content || d.reasoning) schedule();
+      const imgAdded = appendImages(msg, d.images);
+      if (d.content || d.reasoning || imgAdded) schedule();
       const fr = json && json.choices && json.choices[0] && json.choices[0].finish_reason;
       if (fr) done = true;
     }
@@ -1493,6 +1876,7 @@ async function streamResponse(res, msg, bubble){
         const d = extractDelta(json);
         if (d.reasoning) msg.reasoning += d.reasoning;
         if (d.content) msg.content += d.content;
+        appendImages(msg, d.images);
       } catch(e){}
     }
   }
@@ -1539,6 +1923,7 @@ async function generateReply(){
     };
     if (!isNaN(config.temperature)) body.temperature = config.temperature;
     if (config.maxTokens > 0) body.max_tokens = config.maxTokens;
+    if (config.imageOutput) body.modalities = ['image', 'text'];
 
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -1557,28 +1942,30 @@ async function generateReply(){
     } else if (/application\/json/.test(ctype) || !res.body){
       const json = await res.json();
       const choice = (json.choices && json.choices[0]) || {};
-      const m = choice.message || {};
-      msg.content = m.content || choice.text || '';
-      msg.reasoning = m.reasoning_content || m.reasoning || '';
-      if (!msg.content && !msg.reasoning) throw new Error('接口返回了空内容');
+      const d = extractDelta(json);
+      msg.content = d.content || choice.text || '';
+      msg.reasoning = d.reasoning;
+      appendImages(msg, d.images);
+      if (json && json.images) appendImages(msg, normalizeImages(json.images));
+      if (!msg.content && !msg.reasoning && !(msg.images && msg.images.length)) throw new Error('接口返回了空内容');
     } else {
       // 部分服务未标注 content-type 的 SSE
       await streamResponse(res, msg, mdBubble);
     }
 
-    if (!msg.content && !msg.reasoning){
+    if (!msg.content && !msg.reasoning && !(msg.images && msg.images.length)){
       throw new Error('接口返回了空内容');
     }
   } catch(err){
     if (err && err.name === 'AbortError'){
       aborted = true;
-      if (!msg.content && !msg.reasoning){
+      if (!msg.content && !msg.reasoning && !(msg.images && msg.images.length)){
         msg.error = '已停止生成';
       }
     } else {
       const reason = friendlyError(err);
-      if (msg.content){
-        msg.content += '\n\n> ⚠️ 生成中断：' + reason;
+      if (msg.content || (msg.images && msg.images.length)){
+        msg.error = '生成中断：' + reason;
       } else {
         msg.error = reason;
       }
@@ -1605,6 +1992,82 @@ async function generateReply(){
 /* =========================================================
    7. 发送 / 停止 / 消息操作
    ========================================================= */
+async function generateImageReply(){
+  const conv = currentConv();
+  if (!conv || isGenerating) return;
+
+  if (!config.baseUrl){
+    toast('请先在设置中填写 API 地址', 'err');
+    openSettings();
+    return;
+  }
+  const model = config.imageModel || config.model;
+  if (!model){
+    toast('请先在设置中填写生图模型或对话模型', 'err');
+    openSettings();
+    return;
+  }
+
+  let lastUser = null;
+  for (let i = conv.messages.length - 1; i >= 0; i--){
+    const m = conv.messages[i];
+    if (m && m.role === 'user'){ lastUser = m; break; }
+  }
+  const prompt = lastUser ? (lastUser.content || '').trim() : '';
+  if (!prompt){
+    toast('请输入图片描述', 'err');
+    $('#input').focus();
+    return;
+  }
+
+  const msg = { role: 'assistant', content: '', images: [], ts: Date.now(), model, kind: 'image' };
+  conv.messages.push(msg);
+  isGenerating = true;
+  renderChat();
+  scrollToBottom(true);
+  updateComposerState();
+
+  const controller = new AbortController();
+  activeController = controller;
+  let aborted = false;
+
+  try {
+    const body = { model, prompt, n: 1 };
+    if (config.imageSize && config.imageSize !== 'none') body.size = config.imageSize;
+    const res = await fetch(imagesEndpoint(config.baseUrl), {
+      method: 'POST',
+      headers: buildHeaders(),
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    if (!res.ok) throw new Error(await readError(res));
+    const data = await res.json();
+    const imgs = extractGeneratedImages(data);
+    if (!imgs.length) throw new Error('接口未返回图片，请确认该模型支持 /images/generations');
+    msg.images = imgs;
+  } catch(err){
+    if (err && err.name === 'AbortError'){
+      aborted = true;
+      if (!msg.images.length) msg.error = '已停止生成';
+    } else {
+      const reason = friendlyError(err);
+      msg.error = reason;
+      toast('生成图片失败：' + reason, 'err');
+    }
+  } finally {
+    isGenerating = false;
+    activeController = null;
+    if (aborted && msg.images.length) msg.error = '';
+    touch(conv);
+    saveStore();
+    renderChat();
+    renderSidebar();
+    updateComposerState();
+    scrollToBottom(false);
+    if (window.innerWidth > 900) $('#input').focus();
+  }
+}
+
 function updateComposerState(){
   const btn = $('#sendBtn');
   const input = $('#input');
@@ -1614,12 +2077,36 @@ function updateComposerState(){
     btn.innerHTML = '<svg class="icon"><use href="#i-stop"/></svg>';
     btn.title = '停止生成';
   } else {
+    const hasText = !!input.value.trim();
+    const canSend = chatMode === 'image' ? hasText : (hasText || pendingImages.length > 0);
     btn.classList.remove('stop');
     btn.innerHTML = '<svg class="icon"><use href="#i-send"/></svg>';
-    btn.title = '发送';
-    btn.disabled = !input.value.trim();
+    btn.title = chatMode === 'image' ? '生成图片' : '发送';
+    btn.disabled = !canSend;
   }
   updateModelBadge();
+}
+
+function setMode(mode){
+  chatMode = mode === 'image' ? 'image' : 'chat';
+  const btn = $('#modeBtn');
+  if (btn){
+    btn.classList.toggle('image', chatMode === 'image');
+    const use = $('use', btn);
+    if (use) use.setAttribute('href', chatMode === 'image' ? '#i-image' : '#i-message');
+    $('#modeText').textContent = chatMode === 'image' ? '生图' : '对话';
+    btn.title = chatMode === 'image' ? '切换到对话模式' : '切换到生图模式';
+  }
+  const input = $('#input');
+  if (input){
+    input.placeholder = chatMode === 'image'
+      ? '描述你想生成的图片，例如：雨中的柴犬，电影感光线…'
+      : '给 AI 发送消息…';
+  }
+  $('#attachBtn').hidden = chatMode === 'image';
+  renderPendingImages();
+  updateComposerState();
+  autoResize();
 }
 
 function autoResize(){
@@ -1633,15 +2120,39 @@ function sendMessage(){
   if (isGenerating) return;
   const input = $('#input');
   const text = input.value.trim();
-  if (!text) return;
   const conv = currentConv();
   if (!conv) return;
 
-  conv.messages.push({ role: 'user', content: text, ts: Date.now() });
+  if (chatMode === 'image'){
+    if (!text){
+      toast('请输入图片描述', 'err');
+      input.focus();
+      return;
+    }
+    conv.messages.push({ role: 'user', content: text, ts: Date.now(), mode: 'image' });
+    autoTitle(conv);
+    touch(conv);
+    saveStore();
+
+    input.value = '';
+    autoResize();
+    renderSidebar();
+    renderChat();
+    scrollToBottom(true);
+    generateImageReply();
+    return;
+  }
+
+  if (!text && !pendingImages.length) return;
+  const images = pendingImages.map(img => ({ dataUrl: img.dataUrl, name: img.name }));
+
+  conv.messages.push({ role: 'user', content: text, ts: Date.now(), images: images.length ? images : undefined });
   autoTitle(conv);
   touch(conv);
   saveStore();
 
+  pendingImages = [];
+  renderPendingImages();
   input.value = '';
   autoResize();
   renderSidebar();
@@ -1664,6 +2175,9 @@ function regenerate(index){
   const msg = conv.messages[index];
   if (!msg || msg.role !== 'assistant') return;
 
+  const prevUser = index > 0 ? conv.messages[index - 1] : null;
+  const wasImage = msg.kind === 'image' || !!(prevUser && prevUser.role === 'user' && prevUser.mode === 'image');
+
   conv.messages = conv.messages.slice(0, index);
   let lastUser = -1;
   for (let i = conv.messages.length - 1; i >= 0; i--){
@@ -1675,7 +2189,8 @@ function regenerate(index){
   saveStore();
   renderChat();
   renderSidebar();
-  generateReply();
+  if (wasImage) generateImageReply();
+  else generateReply();
 }
 
 function editMessage(index){
@@ -1683,8 +2198,16 @@ function editMessage(index){
   const conv = currentConv();
   const msg = conv && conv.messages[index];
   if (!msg || msg.role !== 'user') return;
+  if (msg.mode === 'image'){
+    pendingImages = [];
+  } else if (msg.images && msg.images.length){
+    pendingImages = msg.images.map(img => ({ name: img.name || 'image', dataUrl: imageUrl(img) })).filter(x => x.dataUrl);
+  } else {
+    pendingImages = [];
+  }
+  setMode(msg.mode === 'image' ? 'image' : 'chat');
   const input = $('#input');
-  input.value = msg.content;
+  input.value = msg.content || '';
   autoResize();
   input.focus();
   conv.messages = conv.messages.slice(0, index);
@@ -1701,8 +2224,16 @@ function exportChat(){
   let md = '# ' + (conv.title || '对话') + '\n\n';
   md += '> 导出时间：' + new Date().toLocaleString('zh-CN') + '\n\n';
   conv.messages.forEach(m => {
-    if (!m.content) return;
-    md += (m.role === 'user' ? '## 我\n\n' : '## AI\n\n') + m.content + '\n\n---\n\n';
+    const text = m.content || '';
+    const imgs = (m.images || []).map(imageUrl).filter(Boolean);
+    if (!text && !imgs.length) return;
+    md += (m.role === 'user' ? '## 我\n\n' : '## AI\n\n');
+    if (text) md += text + '\n\n';
+    imgs.forEach(url => {
+      if (/^https?:/i.test(url)) md += '![图片](' + url + ')\n\n';
+      else md += '（内嵌图片未导出）\n\n';
+    });
+    md += '---\n\n';
   });
   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
   const a = document.createElement('a');
@@ -1801,6 +2332,9 @@ function fillSettings(){
   $('#setKey').value = config.apiKey;
   $('#setHeaders').value = config.headersRaw || '{}';
   $('#setModel').value = config.model;
+  $('#setImageModel').value = config.imageModel || '';
+  $('#setImageSize').value = config.imageSize || '1024x1024';
+  $('#setImageOutput').checked = !!config.imageOutput;
   $('#setTemp').value = String(isNaN(config.temperature) ? 0.7 : config.temperature);
   $('#setTempVal').textContent = Number($('#setTemp').value).toFixed(1);
   $('#setMaxTokens').value = config.maxTokens ? String(config.maxTokens) : '';
@@ -1834,8 +2368,8 @@ function collectSettings(){
     return null;
   }
   let baseUrl = $('#setBase').value.trim();
-  if (baseUrl && !/^https?:\/\//i.test(baseUrl)){
-    toast('API 地址需以 http:// 或 https:// 开头', 'err');
+  if (baseUrl && !/^(https?:\/\/|\/)/i.test(baseUrl)){
+    toast('API 地址需以 http://、https:// 或 / 开头', 'err');
     $('#setBase').focus();
     return null;
   }
@@ -1846,6 +2380,9 @@ function collectSettings(){
     apiKey: $('#setKey').value.trim(),
     headersRaw,
     model: $('#setModel').value.trim(),
+    imageModel: $('#setImageModel').value.trim(),
+    imageSize: $('#setImageSize').value,
+    imageOutput: $('#setImageOutput').checked,
     temperature: isNaN(temp) ? 0.7 : temp,
     maxTokens: isNaN(maxTokens) || maxTokens < 1 ? 0 : maxTokens,
     systemPrompt: $('#setSystem').value.trim(),
@@ -1959,7 +2496,58 @@ function bindEvents(){
       sendMessage();
     }
   });
-  input.addEventListener('paste', () => setTimeout(autoResize, 0));
+  input.addEventListener('paste', e => {
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    const files = [];
+    for (const it of items){
+      if (it.type && it.type.indexOf('image/') === 0){
+        const f = it.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length){
+      e.preventDefault();
+      addImageFiles(files);
+    } else {
+      setTimeout(autoResize, 0);
+    }
+  });
+
+  $('#modeBtn').addEventListener('click', () => {
+    if (isGenerating){ toast('请等待当前生成结束'); return; }
+    setMode(chatMode === 'image' ? 'chat' : 'image');
+  });
+
+  $('#attachBtn').addEventListener('click', () => $('#fileInput').click());
+  $('#fileInput').addEventListener('change', e => {
+    addImageFiles(e.target.files);
+    e.target.value = '';
+  });
+
+  $('#attachments').addEventListener('click', e => {
+    const btn = e.target.closest('[data-remove]');
+    if (!btn) return;
+    const idx = Number(btn.getAttribute('data-remove'));
+    if (!isNaN(idx)) pendingImages.splice(idx, 1);
+    renderPendingImages();
+    updateComposerState();
+  });
+
+  const composer = $('#composer');
+  composer.addEventListener('dragover', e => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf('Files') !== -1){
+      e.preventDefault();
+      composer.classList.add('dragging');
+    }
+  });
+  composer.addEventListener('dragleave', () => composer.classList.remove('dragging'));
+  composer.addEventListener('drop', e => {
+    composer.classList.remove('dragging');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length){
+      e.preventDefault();
+      addImageFiles(e.dataTransfer.files);
+    }
+  });
 
   $('#sendBtn').addEventListener('click', () => {
     if (isGenerating) stopGeneration();
@@ -1999,9 +2587,17 @@ function bindEvents(){
   });
 
   $('#messages').addEventListener('click', e => {
-    const btn = e.target.closest('button[data-act]');
+    const btn = e.target.closest('[data-act]');
     if (!btn) return;
     const act = btn.getAttribute('data-act');
+    if (act === 'zoom'){
+      openLightbox(btn.getAttribute('data-src'));
+      return;
+    }
+    if (act === 'download'){
+      downloadImage(btn.getAttribute('data-src'), btn.getAttribute('data-name'));
+      return;
+    }
     if (act === 'copy-code'){
       const block = btn.closest('.code-block');
       const code = block && $('pre code', block);
@@ -2020,9 +2616,15 @@ function bindEvents(){
     }
   });
 
+  $('#lbClose').addEventListener('click', closeLightbox);
+  $('#lightbox').addEventListener('click', e => {
+    if (e.target === $('#lightbox')) closeLightbox();
+  });
+
   $('#suggestCards').addEventListener('click', e => {
     const card = e.target.closest('.card');
     if (!card) return;
+    if (card.getAttribute('data-mode') === 'image') setMode('image');
     input.value = card.getAttribute('data-prompt') || '';
     autoResize();
     input.focus();
@@ -2103,6 +2705,7 @@ function bindEvents(){
       createConversation(true);
     }
     if (e.key === 'Escape'){
+      if (!$('#lightbox').hidden){ closeLightbox(); return; }
       if (!$('#modelPop').hidden){ closeModelPop(); return; }
       if ($('#settingsModal').classList.contains('open')) closeSettings();
       else closeSidebar();
@@ -2133,6 +2736,8 @@ function init(){
   renderChat();
   scrollToBottom(true);
   setTimeout(() => scrollToBottom(true), 80);
+  setMode(chatMode);
+  renderPendingImages();
   autoResize();
   updateModelBadge();
   saveStore();
