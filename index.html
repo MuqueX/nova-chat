@@ -324,6 +324,12 @@ a{color:var(--accent)}
   border:1px solid rgba(255,107,129,.3);background:rgba(255,107,129,.07);
   border-radius:10px;padding:10px 13px;font-size:12.5px;line-height:1.7;color:var(--danger);
 }
+.retry-image-btn{
+  display:inline-flex;align-items:center;margin-left:9px;padding:3px 9px;border-radius:6px;
+  border:1px solid var(--border);background:var(--panel);font-size:11px;color:var(--accent);
+  vertical-align:middle;
+}
+.retry-image-btn:hover{border-color:var(--accent);background:var(--accent-soft)}
 
 /* 欢迎页 */
 .welcome{max-width:840px;margin:0 auto;padding:8vh 0 20px;text-align:center;animation:fadeUp .35s ease both}
@@ -1431,7 +1437,8 @@ function renderSidebar(){
     if (last){
       const text = (last.content || '').replace(/\s+/g, ' ').slice(0, 30);
       const hasImg = last.images && last.images.length;
-      preview = (last.role === 'user' ? '你：' : 'AI：') + (text || (hasImg ? '[图片]' : ''));
+      const fallback = hasImg ? '[图片]' : (last.error ? '[生成失败]' : '');
+      preview = (last.role === 'user' ? '你：' : 'AI：') + (text || fallback);
     }
     return '<div class="conv-item' + (c.id === currentId ? ' active' : '') + '" data-id="' + c.id + '">' +
       '<div class="t"><b>' + escapeHtml(c.title || '新对话') + '</b><span>' + escapeHtml(preview) + '</span></div>' +
@@ -1810,6 +1817,12 @@ async function addImageFiles(files){
   autoResize();
 }
 
+function errorHTML(msg, index){
+  return '<div class="msg-error">' + escapeHtml(msg.error || '') +
+    (msg.retryImage ? '<button class="retry-image-btn" type="button" data-act="retry-image" data-index="' + index + '">改用生图接口重试</button>' : '') +
+    '</div>';
+}
+
 function messageHTML(msg, index, streamingIndex){
   const isUser = msg.role === 'user';
   const time = formatTime(msg.ts);
@@ -1834,7 +1847,7 @@ function messageHTML(msg, index, streamingIndex){
   let body = '<details class="reasoning"' + (msg.reasoning ? '' : ' style="display:none"') + (isStreaming && !isImageGen ? ' open' : '') +
     '><summary>思考过程</summary><div class="body">' + escapeHtml(msg.reasoning || '') + '</div></details>';
   if (msg.error && !msg.content && !hasImages){
-    body += '<div class="msg-error">' + escapeHtml(msg.error) + '</div>';
+    body += errorHTML(msg, index);
   } else if (isImageGen && !msg.content && !hasImages){
     body += '<div class="md"><div class="img-loading"><span class="spinner"></span>' +
       (isStreaming ? '正在生成图片…' : '暂无图片') + '</div></div>';
@@ -1843,7 +1856,7 @@ function messageHTML(msg, index, streamingIndex){
       ? '<div class="typing"><i></i><i></i><i></i></div>'
       : (msg.content ? mdToHtml(msg.content) + (isStreaming ? '<span class="cursor"></span>' : '') : '');
     if (inner) body += '<div class="md">' + inner + '</div>';
-    if (msg.error) body += '<div class="msg-error" style="margin-top:8px">' + escapeHtml(msg.error) + '</div>';
+    if (msg.error) body += '<div style="margin-top:8px">' + errorHTML(msg, index) + '</div>';
   }
   body += '<div class="msg-images ai-images" data-images>' + imagesHTML(msg.images, 'ai') + '</div>';
 
@@ -1962,6 +1975,68 @@ function contentToParts(value){
   return { text, images };
 }
 
+function isImagePlaceholder(text){
+  if (typeof text !== 'string') return false;
+  const t = text.trim();
+  if (!t || t.length > 300) return false;
+  return /^\[(?:image|图片|图像|img)[^\]]*\]$/i.test(t) ||
+    /\[(?:image|图片|图像)\s*[:：]\s*base64[^\]]*\]/i.test(t);
+}
+
+function collectDeepImages(root, depth, out){
+  depth = depth || 0;
+  out = out || [];
+  if (depth > 8 || root == null) return out;
+  if (typeof root === 'string'){
+    const s = root.trim();
+    if (/^data:image\/[^;]+;base64,/i.test(s)){
+      out.push({ url: s });
+    } else if (/^https?:\/\/[^\s]+\.(png|jpe?g|gif|webp|avif|bmp)(\?[^\s]*)?$/i.test(s)){
+      out.push({ url: resolveImageUrl(s) });
+    } else if (looksLikeBase64(s)){
+      out.push({ url: toB64DataUrl(s) });
+    }
+    return out;
+  }
+  if (Array.isArray(root)){
+    root.forEach(x => collectDeepImages(x, depth + 1, out));
+    return out;
+  }
+  if (typeof root !== 'object') return out;
+  const skip = ['messages', 'input', 'request', 'prompt', 'instructions', 'system', 'tools', 'tool_calls', 'api_key', 'authorization'];
+  Object.keys(root).forEach(k => {
+    if (skip.indexOf(String(k).toLowerCase()) !== -1) return;
+    collectDeepImages(root[k], depth + 1, out);
+  });
+  return out;
+}
+
+function finalizeImagePlaceholder(msg){
+  if (!msg || typeof msg.content !== 'string') return;
+  const re = /\[(?:image|图片|图像|img)[^\]]*\]/gi;
+  if (!re.test(msg.content)) return;
+  re.lastIndex = 0;
+  const hasImages = !!(msg.images && msg.images.length);
+  if (hasImages){
+    msg.content = msg.content.replace(re, '').replace(/\n{3,}/g, '\n\n').trim();
+    return;
+  }
+  if (isImagePlaceholder(msg.content)){
+    msg.content = '';
+    msg.retryImage = true;
+    msg.error = '接口仅返回了图片占位符，未提供可显示的图片数据。可改用 /images/generations 生图接口重试。';
+    return;
+  }
+  msg.content = msg.content.replace(re, '').trim();
+  if (!msg.content){
+    msg.retryImage = true;
+    msg.error = '接口仅返回了图片占位符，未提供可显示的图片数据。可改用 /images/generations 生图接口重试。';
+  } else {
+    msg.retryImage = true;
+    msg.error = '接口返回了图片占位符，但未提供图片数据。';
+  }
+}
+
 function extractDelta(json){
   if (!json) return { content: '', reasoning: '', images: [] };
   const choice = (json.choices && json.choices[0]) || {};
@@ -2001,6 +2076,7 @@ async function streamResponse(res, msg, bubble){
   let paintTimer = null;
   let lastPaint = 0;
   let done = false;
+  let placeholderSeen = false;
 
   const paint = () => {
     if (!bubble || !bubble.isConnected) return;
@@ -2042,15 +2118,31 @@ async function streamResponse(res, msg, bubble){
       if (!payload) continue;
       if (payload === '[DONE]'){ done = true; continue; }
       let json;
-      try { json = JSON.parse(payload); } catch(e){ continue; }
+      try { json = JSON.parse(payload); } catch(e){
+        const rawImgs = normalizeImages(payload);
+        if (rawImgs.length && appendImages(msg, rawImgs)) schedule();
+        continue;
+      }
       if (json && json.error){
         throw new Error(json.error.message || json.error.msg || '接口返回错误');
       }
       const d = extractDelta(json);
       if (d.reasoning) msg.reasoning += d.reasoning;
       if (d.content) msg.content += d.content;
-      const imgAdded = appendImages(msg, d.images);
-      if (d.content || d.reasoning || imgAdded) schedule();
+      if (isImagePlaceholder(msg.content) || /^\[(?:image|图片|图像|img)/i.test(msg.content.trim())){
+        placeholderSeen = true;
+      }
+      const extra = [];
+      if (json.images) extra.push(...normalizeImages(json.images));
+      if (!json.choices && (json.output || json.data || json.result || json.type)){
+        extra.push(...extractGeneratedImages(json));
+      }
+      if (isImagePlaceholder(d.content) || placeholderSeen){
+        extra.push(...collectDeepImages(json));
+      }
+      const addedKnown = appendImages(msg, d.images);
+      const addedExtra = extra.length ? appendImages(msg, extra) : false;
+      if (d.content || d.reasoning || addedKnown || addedExtra) schedule();
       const fr = json && json.choices && json.choices[0] && json.choices[0].finish_reason;
       if (fr) done = true;
     }
@@ -2063,8 +2155,22 @@ async function streamResponse(res, msg, bubble){
         const d = extractDelta(json);
         if (d.reasoning) msg.reasoning += d.reasoning;
         if (d.content) msg.content += d.content;
+        if (isImagePlaceholder(msg.content) || /^\[(?:image|图片|图像|img)/i.test(msg.content.trim())){
+          placeholderSeen = true;
+        }
+        const extra = [];
+        if (json.images) extra.push(...normalizeImages(json.images));
+        if (!json.choices && (json.output || json.data || json.result || json.type)){
+          extra.push(...extractGeneratedImages(json));
+        }
+        if (isImagePlaceholder(msg.content) || placeholderSeen){
+          extra.push(...collectDeepImages(json));
+        }
         appendImages(msg, d.images);
-      } catch(e){}
+        if (extra.length) appendImages(msg, extra);
+      } catch(e){
+        appendImages(msg, normalizeImages(payload));
+      }
     }
   }
   done = true;
@@ -2134,14 +2240,22 @@ async function generateReply(){
       msg.reasoning = d.reasoning;
       appendImages(msg, d.images);
       appendImages(msg, extractGeneratedImages(json));
-      if (!msg.content && !msg.reasoning && !(msg.images && msg.images.length)) throw new Error('接口返回了空内容');
+      if ((!msg.content && !(msg.images && msg.images.length)) || isImagePlaceholder(msg.content)){
+        appendImages(msg, collectDeepImages(json));
+      }
     } else {
       // 部分服务未标注 content-type 的 SSE
       await streamResponse(res, msg, mdBubble);
     }
 
     await hydrateMessageImages(msg);
-    if (!msg.content && !msg.reasoning && !(msg.images && msg.images.length)){
+    finalizeImagePlaceholder(msg);
+    if (msg.retryImage && !(msg.images && msg.images.length) && !controller.signal.aborted){
+      toast('检测到图片占位符，正在改用生图接口重试…');
+      const recovered = await recoverWithImageApi(msg, conv, controller.signal);
+      if (recovered) toast('已改用生图接口生成图片', 'ok');
+    }
+    if (!msg.content && !msg.reasoning && !(msg.images && msg.images.length) && !msg.error){
       throw new Error('接口返回了空内容');
     }
   } catch(err){
@@ -2180,6 +2294,38 @@ async function generateReply(){
 /* =========================================================
    7. 发送 / 停止 / 消息操作
    ========================================================= */
+async function recoverWithImageApi(msg, conv, signal){
+  if (!msg || !conv || !config.baseUrl) return false;
+  const model = config.imageModel || config.model;
+  if (!model) return false;
+  const lastUser = [...conv.messages].reverse().find(m => m.role === 'user' && (m.content || '').trim());
+  const prompt = lastUser ? lastUser.content.trim() : '';
+  if (!prompt) return false;
+  try {
+    const body = { model, prompt, n: 1 };
+    if (config.imageSize && config.imageSize !== 'none') body.size = config.imageSize;
+    const res = await fetch(imagesEndpoint(config.baseUrl), {
+      method: 'POST',
+      headers: buildHeaders(),
+      body: JSON.stringify(body),
+      signal
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    const imgs = extractGeneratedImages(data);
+    if (!imgs.length) return false;
+    msg.images = imgs;
+    await hydrateMessageImages(msg);
+    msg.content = '';
+    msg.error = '';
+    msg.retryImage = false;
+    return true;
+  } catch(e){
+    if (e && e.name === 'AbortError') msg.error = '已停止生成';
+    return false;
+  }
+}
+
 async function generateImageReply(){
   const conv = currentConv();
   if (!conv || isGenerating) return;
@@ -2363,6 +2509,7 @@ function regenerate(index){
   if (!conv) return;
   const msg = conv.messages[index];
   if (!msg || msg.role !== 'assistant') return;
+  if (msg.retryImage){ retryWithImageApi(index); return; }
 
   const prevUser = index > 0 ? conv.messages[index - 1] : null;
   const wasImage = msg.kind === 'image' || !!(prevUser && prevUser.role === 'user' && prevUser.mode === 'image');
@@ -2380,6 +2527,28 @@ function regenerate(index){
   renderSidebar();
   if (wasImage) generateImageReply();
   else generateReply();
+}
+
+function retryWithImageApi(index){
+  if (isGenerating) return;
+  const conv = currentConv();
+  if (!conv) return;
+  const msg = conv.messages[index];
+  if (!msg || msg.role !== 'assistant') return;
+
+  conv.messages = conv.messages.slice(0, index);
+  let lastUser = -1;
+  for (let i = conv.messages.length - 1; i >= 0; i--){
+    if (conv.messages[i].role === 'user'){ lastUser = i; break; }
+  }
+  if (lastUser === -1){ toast('没有可用的提示词', 'err'); return; }
+  conv.messages = conv.messages.slice(0, lastUser + 1);
+  touch(conv);
+  saveStore();
+  renderChat();
+  renderSidebar();
+  setMode('image');
+  generateImageReply();
 }
 
 function editMessage(index){
@@ -2796,7 +2965,9 @@ function bindEvents(){
     const idx = Number(btn.getAttribute('data-index'));
     const conv = currentConv();
     if (!conv || !conv.messages[idx]) return;
-    if (act === 'copy'){
+    if (act === 'retry-image'){
+      retryWithImageApi(idx);
+    } else if (act === 'copy'){
       copyText(conv.messages[idx].content || '');
     } else if (act === 'regen'){
       regenerate(idx);
