@@ -285,6 +285,7 @@ a{color:var(--accent)}
 .md th{background:var(--panel);font-weight:600;color:var(--text-strong)}
 .md tr:nth-child(even) td{background:var(--panel-2)}
 .md img{max-width:100%;border-radius:10px;margin:6px 0}
+.md img.md-img{max-height:360px;object-fit:contain;border:1px solid var(--border);cursor:zoom-in;background:var(--panel)}
 .code-block{
   margin:0 0 14px;border:1px solid #1d2638;border-radius:11px;overflow:hidden;
   background:var(--code-bg);box-shadow:0 8px 24px rgba(0,0,0,.18);
@@ -431,6 +432,15 @@ a{color:var(--accent)}
 }
 .msg-image:hover .img-dl{opacity:1}
 @media (hover:none){.img-dl{opacity:1}}
+.img-broken{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
+  min-height:120px;padding:16px 12px;border:1px dashed var(--border);border-radius:9px;
+  background:var(--bg);color:var(--muted);font-size:12px;text-align:center;
+}
+.msg-image .img-broken{min-height:100%;border:0;border-radius:0}
+.img-broken a{font-size:12px;color:var(--accent);word-break:break-all}
+.img-broken button{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:4px 9px}
+.img-broken button:hover{color:var(--text)}
 .img-loading{
   display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);
   padding:16px;border:1px dashed var(--border);border-radius:10px;background:var(--panel);
@@ -1135,9 +1145,18 @@ function inlineMd(text){
     codes.push(c);
     return '\u0001IC' + (codes.length - 1) + '\u0001';
   });
-  text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img alt="$1" src="$2" loading="lazy">');
+  text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, url) => {
+    const src = resolveImageUrl(url);
+    return '<img class="md-img" alt="' + alt + '" src="' + src + '" loading="lazy" referrerpolicy="no-referrer" data-act="zoom" data-src="' + src + '">';
+  });
   text = text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  text = text.replace(/(^|[\s>])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
+  text = text.replace(/(^|[\s>])(https?:\/\/[^\s<]+)/g, (m, pre, url) => {
+    if (/\.(png|jpe?g|gif|webp|avif|bmp)(\?[^\s<]*)?$/i.test(url)){
+      const src = resolveImageUrl(url);
+      return pre + '<img class="md-img" src="' + src + '" alt="图片" loading="lazy" referrerpolicy="no-referrer" data-act="zoom" data-src="' + src + '">';
+    }
+    return pre + '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+  });
   text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
   text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
@@ -1186,6 +1205,13 @@ function mdToHtml(raw){
       return '\n\u0000CODE' + (codeBlocks.length - 1) + '\u0000\n';
     });
   }
+
+  // 兼容模型直接返回 <img src="..."> 的情况
+  src = src.replace(/<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>/gi, (m, dq, sq, bare) => {
+    const u = dq || sq || bare || '';
+    if (!u) return '';
+    return '\n![图片](' + u.replace(/\s+/g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29') + ')\n';
+  });
 
   // 防止原始 HTML 注入
   src = escapeHtml(src);
@@ -1442,42 +1468,202 @@ function imageUrl(img){
   return img && (img.dataUrl || img.url) || '';
 }
 
+function looksLikeBase64(s){
+  if (typeof s !== 'string') return false;
+  const t = s.replace(/\s+/g, '');
+  return t.length > 300 && /^[A-Za-z0-9+/=]+$/.test(t);
+}
+
+function toB64DataUrl(b64, mime){
+  const type = (mime && /^image\//i.test(mime)) ? mime : 'image/png';
+  return 'data:' + type + ';base64,' + String(b64).replace(/\s+/g, '');
+}
+
+function resolveImageUrl(url){
+  if (!url) return '';
+  const s = String(url).trim();
+  if (/^(data:|blob:|https?:)/i.test(s)) return s;
+  try {
+    const base = new URL(config.baseUrl || location.href, location.href);
+    const dir = base.href.endsWith('/') ? base.href : base.href.replace(/[^/]*$/, '');
+    return new URL(s, dir).href;
+  } catch(e){
+    return s;
+  }
+}
+
+function blobToDataUrl(blob){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function imageAuthHeaders(){
+  const headers = {};
+  if (config.apiKey) headers['Authorization'] = 'Bearer ' + config.apiKey;
+  const custom = parseHeaders(config.headersRaw) || {};
+  Object.keys(custom).forEach(k => { headers[k] = custom[k]; });
+  return headers;
+}
+
+function apiOrigin(){
+  try {
+    return new URL(config.baseUrl || location.href, location.href).origin;
+  } catch(e){
+    return location.origin;
+  }
+}
+
+async function hydrateMessageImages(msg){
+  if (!msg || !msg.images || !msg.images.length) return false;
+  let changed = false;
+  for (const img of msg.images){
+    if (!img || img.dataUrl) continue;
+    const url = img.url || '';
+    if (!/^https?:/i.test(url)) continue;
+    let parsed;
+    try { parsed = new URL(url); } catch(e){ continue; }
+    if (parsed.origin !== apiOrigin()) continue;
+    try {
+      const res = await fetch(url, { headers: imageAuthHeaders() });
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      if (!/^image\//i.test(blob.type)) continue;
+      img.dataUrl = await blobToDataUrl(blob);
+      changed = true;
+    } catch(e){}
+  }
+  return changed;
+}
+
+function imageErrorFallback(e){
+  const img = e.target;
+  if (!img || img.tagName !== 'IMG') return;
+  if (!img.closest('.msg')) return;
+  if (img.dataset.broken === '1') return;
+
+  let src = img.getAttribute('data-src') || img.src;
+  // HTTPS 页面无法加载 HTTP 图片：先尝试升级为 HTTPS，再失败才展示兜底
+  if (location.protocol === 'https:' && /^http:\/\//i.test(src) && img.dataset.retried !== '1'){
+    img.dataset.retried = '1';
+    img.dataset.originalSrc = src;
+    const httpsUrl = src.replace(/^http:/i, 'https:');
+    img.setAttribute('data-src', httpsUrl);
+    img.src = httpsUrl;
+    return;
+  }
+
+  img.dataset.broken = '1';
+  src = img.dataset.originalSrc || src;
+  img.style.display = 'none';
+
+  const note = document.createElement('div');
+  note.className = 'img-broken';
+  const label = document.createElement('div');
+  label.textContent = '图片加载失败，可能是链接失效、跨域限制或混合内容拦截';
+  const link = document.createElement('a');
+  link.href = src;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = '打开原图';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = '复制图片链接';
+  btn.addEventListener('click', () => copyText(src));
+  note.appendChild(label);
+  note.appendChild(link);
+  note.appendChild(btn);
+
+  const wrap = img.closest('.msg-image');
+  if (wrap){
+    const dl = wrap.querySelector('.img-dl');
+    if (dl) dl.remove();
+    wrap.appendChild(note);
+  } else {
+    img.insertAdjacentElement('afterend', note);
+  }
+}
+
 function imagesHTML(images, cls){
   if (!images || !images.length) return '';
   const isAI = cls === 'ai';
   return images.map(img => {
-    const url = imageUrl(img);
+    const url = resolveImageUrl(imageUrl(img));
     if (!url) return '';
     const safe = escapeHtml(url);
     const alt = escapeHtml(img.alt || (isAI ? 'AI 生成的图片' : '图片'));
     return '<div class="msg-image">' +
-      '<img src="' + safe + '" alt="' + alt + '" loading="lazy" data-act="zoom" data-src="' + safe + '">' +
+      '<img src="' + safe + '" alt="' + alt + '" loading="lazy" referrerpolicy="no-referrer" data-act="zoom" data-src="' + safe + '">' +
       (isAI ? '<button class="img-dl" type="button" data-act="download" data-src="' + safe + '" data-name="' + escapeHtml(img.name || 'ai-image.png') + '">下载</button>' : '') +
     '</div>';
   }).join('');
 }
 
-function normalizeImages(value){
+function normalizeImages(value, depth){
+  depth = depth || 0;
   const out = [];
-  const push = (item) => {
-    if (!item) return;
+  if (depth > 5 || value == null) return out;
+
+  const pushUrl = (u) => {
+    const resolved = resolveImageUrl(u);
+    if (resolved) out.push({ url: resolved });
+  };
+  const pushB64 = (b, mime) => {
+    if (looksLikeBase64(b)) out.push({ url: toB64DataUrl(b, mime) });
+  };
+
+  const visit = (item, d) => {
+    if (d > 5 || item == null) return;
     if (typeof item === 'string'){
-      if (/^(https?:\/\/|data:image\/)/i.test(item)) out.push({ url: item });
+      if (/^(data:image\/|blob:|https?:\/\/|\/\/|\/|\.\/|\.\.\/)/i.test(item)) pushUrl(item);
+      else if (/^(?:[\w.-]+\/)*[\w.-]+\.(png|jpe?g|gif|webp|avif|bmp)(\?[^\s]*)?$/i.test(item)) pushUrl(item);
+      else if (looksLikeBase64(item)) pushB64(item);
       return;
     }
-    let url = '';
-    if (item.b64_json) url = 'data:image/png;base64,' + item.b64_json;
-    else if (item.dataUrl) url = item.dataUrl;
-    else if (item.url) url = item.url;
-    else if (item.image_url && item.image_url.url) url = item.image_url.url;
-    else if (item.source && item.source.data){
-      const mt = item.source.media_type || 'image/png';
-      url = 'data:' + mt + ';base64,' + item.source.data;
+    if (Array.isArray(item)){
+      item.forEach(x => visit(x, d + 1));
+      return;
     }
-    if (url) out.push({ url, alt: item.alt || '' });
+    if (typeof item !== 'object') return;
+
+    if (typeof item.b64_json === 'string') pushB64(item.b64_json, item.mime_type);
+    else if (typeof item.b64 === 'string') pushB64(item.b64, item.mime_type);
+    else if (typeof item.base64 === 'string') pushB64(item.base64, item.mime_type);
+    else if (typeof item.image_base64 === 'string') pushB64(item.image_base64, item.mime_type);
+    else if (typeof item.imageBase64 === 'string') pushB64(item.imageBase64, item.mime_type);
+    else if (typeof item.result === 'string') pushB64(item.result, item.mime_type);
+
+    if (item.type && /image/i.test(String(item.type)) && typeof item.data === 'string'){
+      pushB64(item.data, item.mime_type);
+    }
+
+    if (typeof item.url === 'string') pushUrl(item.url);
+    else if (item.url && typeof item.url.url === 'string') pushUrl(item.url.url);
+    else if (typeof item.image_url === 'string') pushUrl(item.image_url);
+    else if (item.image_url && typeof item.image_url.url === 'string') pushUrl(item.image_url.url);
+    else if (typeof item.image === 'string'){
+      if (/^(data:image\/|blob:|https?:\/\/|\/\/)/i.test(item.image)) pushUrl(item.image);
+      else if (looksLikeBase64(item.image)) pushB64(item.image, item.mime_type);
+    } else if (item.image && typeof item.image === 'object'){
+      visit(item.image, d + 1);
+    }
+
+    if (item.source && typeof item.source === 'object'){
+      if (item.source.type === 'base64' && typeof item.source.data === 'string'){
+        pushB64(item.source.data, item.source.media_type);
+      } else if (typeof item.source.url === 'string'){
+        pushUrl(item.source.url);
+      }
+    }
+
+    if (item.images) visit(item.images, d + 1);
+    if (item.attachments) visit(item.attachments, d + 1);
   };
-  if (Array.isArray(value)) value.forEach(push);
-  else if (value && typeof value === 'object') push(value);
+
+  visit(value, depth);
   return out;
 }
 
@@ -1497,24 +1683,14 @@ function appendImages(msg, list){
 }
 
 function extractGeneratedImages(data){
-  const out = [];
-  const push = (item) => {
-    if (!item) return;
-    if (typeof item === 'string'){
-      if (/^(https?:\/\/|data:image\/)/i.test(item)) out.push({ url: item });
-      return;
-    }
-    let url = '';
-    if (item.b64_json) url = 'data:image/png;base64,' + item.b64_json;
-    else if (item.url) url = item.url;
-    else if (item.image_url && item.image_url.url) url = item.image_url.url;
-    else if (item.image) url = item.image;
-    if (url) out.push({ url, alt: item.revised_prompt || 'AI 生成的图片' });
-  };
-  const arr = data && (data.data || data.images || data.output);
-  if (Array.isArray(arr)) arr.forEach(push);
-  else if (data) push(data);
-  return out;
+  if (!data) return [];
+  const source = data.data || data.images || data.output || data;
+  const imgs = normalizeImages(source);
+  const arr = Array.isArray(source) ? source : [];
+  arr.forEach((item, i) => {
+    if (imgs[i] && item && item.revised_prompt) imgs[i].alt = item.revised_prompt;
+  });
+  return imgs;
 }
 
 function openLightbox(src){
@@ -1775,7 +1951,13 @@ function contentToParts(value){
       if (typeof p === 'string'){ text += p; return; }
       if (typeof p.text === 'string') text += p.text;
       if (p.type && /image/i.test(String(p.type))) images.push(...normalizeImages([p]));
+      else if (p.image_url || p.image) images.push(...normalizeImages([p]));
     });
+  } else if (value && typeof value === 'object'){
+    if (typeof value.text === 'string') text += value.text;
+    if ((value.type && /image/i.test(String(value.type))) || value.image_url || value.image){
+      images.push(...normalizeImages([value]));
+    }
   }
   return { text, images };
 }
@@ -1800,8 +1982,13 @@ function extractDelta(json){
 
   const images = [];
   images.push(...normalizeImages(delta.images));
+  images.push(...normalizeImages(delta.image));
+  images.push(...normalizeImages(delta.attachments));
   images.push(...dParts.images);
   images.push(...normalizeImages(message.images));
+  images.push(...normalizeImages(message.image));
+  images.push(...normalizeImages(message.attachments));
+  images.push(...normalizeImages(choice.images));
   images.push(...mParts.images);
 
   return { content, reasoning, images };
@@ -1946,13 +2133,14 @@ async function generateReply(){
       msg.content = d.content || choice.text || '';
       msg.reasoning = d.reasoning;
       appendImages(msg, d.images);
-      if (json && json.images) appendImages(msg, normalizeImages(json.images));
+      appendImages(msg, extractGeneratedImages(json));
       if (!msg.content && !msg.reasoning && !(msg.images && msg.images.length)) throw new Error('接口返回了空内容');
     } else {
       // 部分服务未标注 content-type 的 SSE
       await streamResponse(res, msg, mdBubble);
     }
 
+    await hydrateMessageImages(msg);
     if (!msg.content && !msg.reasoning && !(msg.images && msg.images.length)){
       throw new Error('接口返回了空内容');
     }
@@ -2045,6 +2233,7 @@ async function generateImageReply(){
     const imgs = extractGeneratedImages(data);
     if (!imgs.length) throw new Error('接口未返回图片，请确认该模型支持 /images/generations');
     msg.images = imgs;
+    await hydrateMessageImages(msg);
   } catch(err){
     if (err && err.name === 'AbortError'){
       aborted = true;
@@ -2615,6 +2804,7 @@ function bindEvents(){
       editMessage(idx);
     }
   });
+  $('#messages').addEventListener('error', imageErrorFallback, true);
 
   $('#lbClose').addEventListener('click', closeLightbox);
   $('#lightbox').addEventListener('click', e => {
